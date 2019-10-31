@@ -354,8 +354,8 @@ const saveForeignKeys = (index, tableSchema, columns) => {
       // foreign key already exists, alter the foreign key
       const migrationUpAlterFKeySql = `
              alter table "${schemaName}"."${tableName}" drop constraint "${constraintName}",
-             add constraint "${generatedConstraintName}" 
-             foreign key (${lcols.join(', ')}) 
+             add constraint "${generatedConstraintName}"
+             foreign key (${lcols.join(', ')})
              references "${refSchemaName}"."${refTableName}"
              (${rcols.join(', ')}) on update ${onUpdate} on delete ${onDelete};
       `;
@@ -370,8 +370,8 @@ const saveForeignKeys = (index, tableSchema, columns) => {
       // foreign key not found, create a new one
       const migrationUpCreateFKeySql = `
            alter table "${schemaName}"."${tableName}"
-           add constraint "${generatedConstraintName}" 
-           foreign key (${lcols.join(', ')}) 
+           add constraint "${generatedConstraintName}"
+           foreign key (${lcols.join(', ')})
            references "${refSchemaName}"."${refTableName}"
            (${rcols.join(', ')}) on update ${onUpdate} on delete ${onDelete};
       `;
@@ -391,16 +391,16 @@ const saveForeignKeys = (index, tableSchema, columns) => {
       const oldConstraint = tableSchema.foreign_key_constraints[index];
       const migrationDownAlterFKeySql = `
           alter table "${schemaName}"."${tableName}" drop constraint "${generatedConstraintName}",
-          add constraint "${constraintName}" 
+          add constraint "${constraintName}"
           foreign key (${Object.keys(oldConstraint.column_mapping)
-            .map(lc => `"${lc}"`)
-            .join(', ')}) 
+    .map(lc => `"${lc}"`)
+    .join(', ')})
           references "${oldConstraint.ref_table_table_schema}"."${
-        oldConstraint.ref_table
-      }"
+  oldConstraint.ref_table
+}"
           (${Object.values(oldConstraint.column_mapping)
-            .map(rc => `"${rc}"`)
-            .join(', ')}) 
+    .map(rc => `"${rc}"`)
+    .join(', ')})
           on update ${pgConfTypes[oldConstraint.on_update]}
           on delete ${pgConfTypes[oldConstraint.on_delete]};
         `;
@@ -658,12 +658,12 @@ const deleteTrigger = (trigger, table) => {
 
     downMigrationSql += `CREATE TRIGGER "${triggerName}"
 ${trigger.action_timing} ${
-      trigger.event_manipulation
-    } ON "${tableSchema}"."${tableName}"
+  trigger.event_manipulation
+} ON "${tableSchema}"."${tableName}"
 FOR EACH ${trigger.action_orientation} ${trigger.action_statement};`;
 
     if (trigger.comment) {
-      downMigrationSql += `COMMENT ON TRIGGER "${triggerName}" ON "${tableSchema}"."${tableName}" 
+      downMigrationSql += `COMMENT ON TRIGGER "${triggerName}" ON "${tableSchema}"."${tableName}"
 IS ${sqlEscapeText(trigger.comment)};`;
     }
     const migrationDown = [
@@ -1520,184 +1520,49 @@ const saveColumnChangesSql = (colName, column, onSuccess) => {
     const schemaChangesUp =
       originalColType !== colType
         ? [
-            {
-              type: 'run_sql',
-              args: {
-                sql: columnChangesUpQuery,
-              },
+          {
+            type: 'run_sql',
+            args: {
+              sql: columnChangesUpQuery,
             },
-          ]
+          },
+        ]
         : [];
     const schemaChangesDown =
       originalColType !== colType
         ? [
-            {
-              type: 'run_sql',
-              args: {
-                sql: columnChangesDownQuery,
-              },
+          {
+            type: 'run_sql',
+            args: {
+              sql: columnChangesDownQuery,
             },
-          ]
+          },
+        ]
         : [];
 
     /* column default up/down migration */
-    if (def.trim() !== '') {
-      // ALTER TABLE ONLY <table> ALTER COLUMN <column> SET DEFAULT <default>;
-      const columnDefaultUpQuery =
-        'ALTER TABLE ONLY ' +
-        '"' +
-        currentSchema +
-        '"' +
-        '.' +
-        '"' +
-        tableName +
-        '"' +
-        ' ALTER COLUMN ' +
-        '"' +
-        colName +
-        '"' +
-        ' SET DEFAULT ' +
-        defWithQuotes +
-        ';';
-      let columnDefaultDownQuery =
-        'ALTER TABLE ONLY ' +
-        '"' +
-        currentSchema +
-        '"' +
-        '.' +
-        '"' +
-        tableName +
-        '"' +
-        ' ALTER COLUMN ' +
-        '"' +
-        colName +
-        ' DROP DEFAULT;';
+    const newDefaultExpr = def.trim() !== '' ? defWithQuotes : '';
+    const oldDefaultExpr = originalColDefault || '';
+    if (oldDefaultExpr !== newDefaultExpr) {
+      const setColumnDefault = (defaultExpr) => {
+        if (!defaultExpr) {
+          return `ALTER TABLE ONLY "${currentSchema}"."${tableName}" ALTER COLUMN "${colName}" DROP DEFAULT;`;
+        }
+        return `ALTER TABLE ONLY "${currentSchema}"."${tableName}" ALTER COLUMN "${colName}" SET DEFAULT ${defaultExpr};`;
+      };
 
-      // form migration queries
-      if (
-        column.column_default !== '' &&
-        column.column_default === def.trim()
-      ) {
-        // default value unchanged
-        columnDefaultDownQuery =
-          'ALTER TABLE ONLY ' +
-          '"' +
-          currentSchema +
-          '"' +
-          '.' +
-          '"' +
-          tableName +
-          '"' +
-          ' ALTER COLUMN ' +
-          '"' +
-          colName +
-          '"' +
-          ' SET DEFAULT ' +
-          defWithQuotes +
-          ';';
-      } else if (
-        column.column_default !== '' &&
-        column.column_default !== def.trim()
-      ) {
-        // default value has changed
-        columnDefaultDownQuery =
-          'ALTER TABLE ONLY ' +
-          '"' +
-          currentSchema +
-          '"' +
-          '.' +
-          '"' +
-          tableName +
-          '"' +
-          ' ALTER COLUMN ' +
-          '"' +
-          colName +
-          '"' +
-          ' SET DEFAULT ' +
-          defWithQuotes +
-          ';';
-      } else {
-        // there was no default value originally. so drop default.
-        columnDefaultDownQuery =
-          'ALTER TABLE ONLY ' +
-          '"' +
-          currentSchema +
-          '"' +
-          '.' +
-          '"' +
-          tableName +
-          '"' +
-          ' ALTER COLUMN ' +
-          '"' +
-          colName +
-          '"' +
-          ' DROP DEFAULT;';
-      }
-
-      // check if default is unchanged and then do a drop. if not skip
-      if (originalColDefault !== def.trim()) {
-        schemaChangesUp.push({
-          type: 'run_sql',
-          args: {
-            sql: columnDefaultUpQuery,
-          },
-        });
-        schemaChangesDown.push({
-          type: 'run_sql',
-          args: {
-            sql: columnDefaultDownQuery,
-          },
-        });
-      }
-    } else {
-      // ALTER TABLE <table> ALTER COLUMN <column> DROP DEFAULT;
-      const columnDefaultUpQuery =
-        'ALTER TABLE ' +
-        '"' +
-        currentSchema +
-        '"' +
-        '.' +
-        '"' +
-        tableName +
-        '"' +
-        ' ALTER COLUMN ' +
-        '"' +
-        colName +
-        '"' +
-        ' DROP DEFAULT;';
-      if (column.column_default !== null) {
-        const columnDefaultDownQuery =
-          'ALTER TABLE ' +
-          '"' +
-          currentSchema +
-          '"' +
-          '.' +
-          '"' +
-          tableName +
-          '"' +
-          ' ALTER COLUMN ' +
-          '"' +
-          colName +
-          '"' +
-          ' SET DEFAULT ' +
-          column.column_default +
-          ';';
-        schemaChangesDown.push({
-          type: 'run_sql',
-          args: {
-            sql: columnDefaultDownQuery,
-          },
-        });
-      }
-
-      if (originalColDefault !== def.trim() && originalColDefault !== null) {
-        schemaChangesUp.push({
-          type: 'run_sql',
-          args: {
-            sql: columnDefaultUpQuery,
-          },
-        });
-      }
+      schemaChangesUp.push({
+        type: 'run_sql',
+        args: {
+          sql: setColumnDefault(newDefaultExpr),
+        },
+      });
+      schemaChangesDown.push({
+        type: 'run_sql',
+        args: {
+          sql: setColumnDefault(oldDefaultExpr),
+        },
+      });
     }
 
     /* column nullable up/down migration */
